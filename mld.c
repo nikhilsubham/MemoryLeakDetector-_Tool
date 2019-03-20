@@ -142,7 +142,8 @@ static void
 add_object_to_object_db(object_db_t *object_db, 
                      void *ptr, 
                      int units,
-                     struct_db_rec_t *struct_rec)
+                     struct_db_rec_t *struct_rec,
+                     mld_boolean_t is_root)
 {
      
     object_db_rec_t *obj_rec = object_db_look_up(object_db, ptr);
@@ -155,6 +156,8 @@ add_object_to_object_db(object_db_t *object_db,
     obj_rec->ptr = ptr;
     obj_rec->units = units;
     obj_rec->struct_rec = struct_rec;
+    obj_rec->is_visited = MLD_FALSE;
+    obj_rec->is_root = is_root;
 
     object_db_rec_t *head = object_db->head;
         
@@ -169,8 +172,6 @@ add_object_to_object_db(object_db_t *object_db,
     object_db->head = obj_rec;
     object_db->count++;
 }
-
-
 
 
 
@@ -266,8 +267,10 @@ print_object_rec(object_db_rec_t *obj_rec, int i){
     
     if(!obj_rec) return;
     printf("---------------------------------------------------------------------------|\n");
-    printf("%-3d ptr = %-8p | next = %-8p | units = %-4d | str_name = %-10s\n\n", 
-        i, obj_rec->ptr, obj_rec->next, obj_rec->units, obj_rec->struct_rec->struct_name); 
+    printf("%-3d ptr = %-8p | next = %-8p | units = %-4d | str_name = %-10s| is_root = %s \n\n", 
+        i, obj_rec->ptr, obj_rec->next, obj_rec->units, obj_rec->struct_rec->struct_name, 
+        obj_rec->is_root ? "TRUE " : "FALSE"); 
+
     printf("Corresponding_oject details are as follows|\n");
 }
 
@@ -286,6 +289,64 @@ print_object_db(object_db_t *object_db){
         mld_dump_object_rec_details(head);
     }
 }
+
+
+/*The global object of the application which is not created by xcalloc
+ * should be registered with MLD using below API*/
+void 
+mld_register_global_object_as_root (object_db_t *object_db,
+                          void *objptr,
+                          char *struct_name,
+                          unsigned int units){
+
+    struct_db_rec_t *struct_rec = struct_db_look_up(object_db->struct_db, struct_name);
+    assert(struct_rec);
+
+   /*Create a new object record and add to object database*/
+   add_object_to_object_db(object_db, objptr, units, struct_rec, MLD_TRUE);  
+}
+
+
+
+
+/* Application might create an object using xcalloc , but at the same time the object
+ * can be root object. Use this API to override the object flags for the object already
+ * preent in object db*/
+void
+mld_set_dynamic_object_as_root(object_db_t *object_db, void *obj_ptr){
+
+    object_db_rec_t *obj_rec = object_db_look_up(object_db, obj_ptr);
+    assert(obj_rec);
+    
+    obj_rec->is_root = MLD_TRUE;
+}
+
+
+static void
+init_mld_algorithm(object_db_t *object_db){
+
+     object_db_rec_t *obj_rec = object_db->head;
+     while(obj_rec){
+         obj_rec->is_visited = MLD_FALSE;
+         obj_rec = obj_rec->next;
+     }
+}
+
+static object_db_rec_t *
+get_next_root_object(object_db_t *object_db, 
+                     object_db_rec_t *starting_from_here){
+
+    object_db_rec_t *first = starting_from_here ? starting_from_here->next : object_db->head;
+    while(first){
+        if(first->is_root)
+            return first;
+        first = first->next;
+    }
+    return NULL;
+}
+
+
+
 
 
 
