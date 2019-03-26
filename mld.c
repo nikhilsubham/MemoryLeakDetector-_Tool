@@ -5,8 +5,8 @@
 #include <string.h>
 
 char *DATA_TYPE[] = {"UINT8", "UINT32", "INT32",
-                     "CHAR", "OBJ_PTR", "FLOAT",
-                     "DOUBLE", "OBJ_STRUCT"};
+                     "CHAR", "OBJ_PTR", "VOID_PTR",
+                    "FLOAT","DOUBLE", "OBJ_STRUCT"};
 
 //head = head->next;
 /*phase1 starts here*/
@@ -116,7 +116,7 @@ void * xcalloc(object_db_t *object_db, char *struct_name, int units)
     struct_db_rec_t *struct_rec = struct_db_look_up(object_db->struct_db, struct_name);
     assert(struct_rec);
     void *ptr = calloc(units, struct_rec->ds_size);
-    add_object_to_object_db(object_db, ptr, units, struct_rec);
+    add_object_to_object_db(object_db, ptr, units, struct_rec,MLD_FALSE);
     return ptr;
 }
 
@@ -196,28 +196,35 @@ void mld_dump_object_rec_details(object_db_rec_t* obj_rec)
              case UINT8:
              case UINT32:
              case INT32:
-             printf("%s[%d] -> %s = %d\n", struct_rec->struct_name,i,t->fname, 
+               printf("%s[%d] -> %s = %d\n", struct_rec->struct_name,i,t->fname, 
                                *(int*)((obj_rec->ptr + (i*struct_rec->ds_size))+ offset));
-             break;
+               break;
 
              case CHAR: 
-             printf("%s[%d] -> %s = %s\n", struct_rec->struct_name,i,t->fname, 
+               printf("%s[%d] -> %s = %s\n", struct_rec->struct_name,i,t->fname, 
                                (char*)((obj_rec->ptr + (i*struct_rec->ds_size))+ offset));
-             break;
+               break;
 
              case FLOAT:
-             printf("%s[%d] -> %s = %f\n", struct_rec->struct_name,i,t->fname, 
+               printf("%s[%d] -> %s = %f\n", struct_rec->struct_name,i,t->fname, 
                               *(float*)((obj_rec->ptr + (i*struct_rec->ds_size))+ offset));
-             break;
+               break;
 
              case DOUBLE:
-             printf("%s[%d] -> %s = %lf\n", struct_rec->struct_name,i,t->fname, 
+               printf("%s[%d] -> %s = %lf\n", struct_rec->struct_name,i,t->fname, 
                               *(double*)((obj_rec->ptr + (i*struct_rec->ds_size))+ offset));
-             break;
+               break;
+
+             case OBJ_PTR:
+               printf("%s[%d] -> %s = %p\n", struct_rec->struct_name,i,t->fname, 
+                              (void*)*(int*)((obj_rec->ptr + (i*struct_rec->ds_size))+ offset));
+               break;
+
+             case OBJ STRUCT:
+               break;
 
              default:
-             printf("%s[%d] -> %s = %p\n", struct_rec->struct_name,i,t->fname, 
-                              (void*)(int*)((obj_rec->ptr + (i*struct_rec->ds_size))+ offset));
+               break;
         }
        }
      printf("\n");
@@ -286,7 +293,7 @@ print_object_db(object_db_t *object_db){
     printf("\nPrinting OBJECT DATABASE\n");
     for(; head; head = head->next){
         print_object_rec(head, i++);
-        mld_dump_object_rec_details(head);
+        //mld_dump_object_rec_details(head);
     }
 }
 
@@ -344,6 +351,138 @@ get_next_root_object(object_db_t *object_db,
     }
     return NULL;
 }
+
+
+
+/* Level 2 Pseudocode : This function explore the direct childs of obj_rec and mark
+ * them visited. Note that obj_rec must have already visted.*/
+static void
+mld_explore_objects_recursively(object_db_t *object_db, 
+                                object_db_rec_t *parent_obj_rec){
+    
+    unsigned int i , n_fields;
+    char *parent_obj_ptr = NULL,
+         *child_obj_offset = NULL;
+    void *child_object_address = NULL;
+    field_info_t *field_info = NULL;
+
+    object_db_rec_t *child_object_rec = NULL;
+    struct_db_rec_t *parent_struct_rec = parent_obj_rec->struct_rec;
+
+    if(!parent_struct_rec){
+        /* Handling void pointers : We cannot explore fields of objects which are of type void * in application.
+         * Such objects will not have structure records, hence, nothing to do here*/
+        return;
+    }
+
+    /*Parent object must have already visited*/
+    assert(parent_obj_rec->is_visited);
+
+    for( i = 0; i < parent_obj_rec->units; i++){
+
+        parent_obj_ptr = (char *)(parent_obj_rec->ptr) + (i * parent_struct_rec->ds_size);
+
+        for(n_fields = 0; n_fields < parent_struct_rec->n_fields; n_fields++){
+
+            field_info = &parent_struct_rec->fields[n_fields];
+
+            /*We are only concerned with fields which are pointer to
+             * other objects*/
+            switch(field_info->dtype){
+                case UINT8:
+                case UINT32:
+                case INT32:
+                case CHAR:
+                case FLOAT:
+                case DOUBLE:
+                case OBJ_STRUCT:
+                    break;
+                case VOID_PTR:
+                case OBJ_PTR:
+                default:
+                    ;
+
+                /*child_obj_offset is the memory location inside parent object
+                 * where address of next level object is stored*/
+                child_obj_offset = parent_obj_ptr + field_info->offset;
+                memcpy(&child_object_address, child_obj_offset, sizeof(void *));
+
+                /*child_object_address now stores the address of the next object in the
+                 * graph. It could be NULL, Handle that as well*/
+                if(!child_object_address)
+                    continue;
+                  
+                child_object_rec = object_db_look_up(object_db, child_object_address);
+                //printf("\n%s\n",child_object_rec->ptr+0);
+
+                assert(child_object_rec);
+                
+                if(!child_object_rec->is_visited){
+                    child_object_rec->is_visited = MLD_TRUE;
+                    mld_explore_objects_recursively(object_db, child_object_rec);
+                }
+                else{
+                    continue; /*Do nothing, explore next child object*/
+                }
+            }
+        }
+    }
+}
+
+
+
+
+/* We will traverse the graph starting from root objects
+ * and mark all reachable nodes as visited*/
+void
+run_mld_algorithm(object_db_t *object_db){
+
+    /*Step 1 : Mark all objects in object databse as unvisited*/
+    init_mld_algorithm(object_db);
+
+    /* Step 2 : Get the first root object from the object db, it could be 
+     * present anywhere in object db. If there are multiple roots in object db
+     * return the first one, we can start mld algorithm from any root object*/
+    object_db_rec_t *root_obj = get_next_root_object(object_db, NULL);
+    //printf("\n%s\n",root_obj->ptr+0);
+
+    while(root_obj){
+        if(root_obj->is_visited){
+           
+            root_obj = get_next_root_object(object_db, root_obj);
+            continue;
+        }
+        
+        /*root objects are always reachable since application holds the global
+         * variable to it*/ 
+        root_obj->is_visited = MLD_TRUE;
+        
+        /*Explore all reachable objects from this root_obj recursively*/
+        mld_explore_objects_recursively(object_db, root_obj);
+
+        root_obj = get_next_root_object(object_db, root_obj);
+    } 
+}
+
+
+void
+report_leaked_objects(object_db_t *object_db){
+
+    int i = 0;
+    object_db_rec_t *head;
+
+    printf("Dumping Leaked Objects\n");
+
+    for(head = object_db->head; head; head = head->next){
+        if(!head->is_visited){
+            print_object_rec(head, i++);
+            mld_dump_object_rec_details(head);
+            printf("\n\n");
+        }
+    }
+}
+
+
 
 
 

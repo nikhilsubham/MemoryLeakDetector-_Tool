@@ -35,10 +35,19 @@ typedef enum {
     INT32,
     CHAR,
     OBJ_PTR,
+    VOID_PTR,
     FLOAT,
     DOUBLE,
     OBJ_STRUCT
 } data_type_t;
+
+typedef enum{
+
+    MLD_FALSE,
+    MLD_TRUE
+} mld_boolean_t;
+
+
 
 /*Structure to store the information of one field of a C structure*/
 typedef struct _field_info_{
@@ -72,17 +81,88 @@ typedef struct _struct_db_{
 /*Structure Data base Definition Ends*/
 
 
-
 /* Printing functions*/
+void reg_structure(struct_db_t *struct_db, char* struct_name,int struct_size,field_info_t* t ,int fields);
 void print_structure_rec (struct_db_rec_t *struct_rec);
 void print_structure_db(struct_db_t *struct_db);
-
 
 /* Fn to add the structure record in a structure database */
 int /*return 0 on success, -1 on failure for some reason*/
 add_structure_to_struct_db(struct_db_t *struct_db, struct_db_rec_t *struct_rec);
+static struct_db_rec_t*  struct_db_look_up(struct_db_t* struct_db, char* struct_name);
 
-struct_db_rect_t*  struct_db_look_up(struct_db_t* struct_db, char* struct_name);
+
+
+/*Object Database structure definitions Starts here*/
+
+typedef struct _object_db_rec_ object_db_rec_t;
+
+struct _object_db_rec_{
+    object_db_rec_t *next;
+    void *ptr;
+    unsigned int units;
+    struct_db_rec_t *struct_rec;
+    mld_boolean_t is_visited; /*Used for Graph traversal*/
+    mld_boolean_t is_root;    /*Is this object is Root object*/
+};
+
+typedef struct _object_db_{
+    struct_db_t *struct_db;
+    object_db_rec_t *head;
+    unsigned int count;
+} object_db_t;
+
+
+
+void mld_dump_object_rec_details(object_db_rec_t* obj_rec);
+void xfree(object_db_t *object_db, void* ptr);
+
+/*Dumping functions*/
+void
+print_object_rec(object_db_rec_t *obj_rec, int i);
+
+void
+print_object_db(object_db_t *object_db);
+
+/*API to malloc the object*/
+void*
+xcalloc(object_db_t *object_db, char *struct_name, int units);
+
+static void
+add_object_to_object_db(object_db_t *object_db, 
+                     void *ptr, 
+                     int units,
+                     struct_db_rec_t *struct_rec,
+                     mld_boolean_t is_root);
+
+void 
+mld_register_global_object_as_root (object_db_t *object_db,
+                          void *objptr,
+                          char *struct_name,
+                          unsigned int units);
+
+void
+mld_set_dynamic_object_as_root(object_db_t *object_db, void *obj_ptr);
+
+static void
+init_mld_algorithm(object_db_t *object_db);
+
+static void
+mld_explore_objects_recursively(object_db_t *object_db, 
+                                object_db_rec_t *parent_obj_rec);
+
+void
+run_mld_algorithm(object_db_t *object_db);
+
+void
+report_leaked_objects(object_db_t *object_db);
+
+static object_db_rec_t *
+get_next_root_object(object_db_t *object_db, 
+                     object_db_rec_t *starting_from_here);
+
+
+
 
 
 
