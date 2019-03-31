@@ -55,7 +55,7 @@ void print_structure_db(struct_db_t *struct_db)
       return;
 
     struct_db_rec_t *struct_rec= struct_db -> head;
-
+    printf("\nPrinting STRUCTURE DATABASE");
     while(struct_rec)
     {
       print_structure_rec(struct_rec);
@@ -90,17 +90,17 @@ void print_structure_rec(struct_db_rec_t *struct_rec)
   if(!struct_rec)
     return;
 
-  printf("%-20s | size %-9d | fields %-9d\n\n", struct_rec->struct_name, 
+  printf("\n%-20s | size %-9d | fields %-9d\n\n", struct_rec->struct_name, 
             struct_rec->ds_size, struct_rec->n_fields);
   int j=0; 
   
   for(j; j<struct_rec->n_fields;j++)
     {
       field_info_t * t= &struct_rec->fields[j];
-      printf("name  %-13s | D_type  %-8s | size  %-3d | offset  %-3d | %-6s\n", 
+      printf("name   %-16s | D_type   %-10s | size   %-3d | offset   %-3d | %-7s\n", 
              t->fname, DATA_TYPE[t->dtype], t->size, t->offset, t->nested_str_name);
     }
-  printf("----------------------------------------------------------------------------|\n");
+  printf("--------------------------------------------------------------------------------------------|\n\n");
 }
 
 
@@ -216,11 +216,12 @@ void mld_dump_object_rec_details(object_db_rec_t* obj_rec)
                break;
 
              case OBJ_PTR:
+             case VOID_PTR:
                printf("%s[%d] -> %s = %p\n", struct_rec->struct_name,i,t->fname, 
                               (void*)*(int*)((obj_rec->ptr + (i*struct_rec->ds_size))+ offset));
                break;
 
-             case OBJ STRUCT:
+             case OBJ_STRUCT:
                break;
 
              default:
@@ -247,7 +248,8 @@ void xfree(object_db_t *object_db, void* ptr)
    if(head->ptr == ptr){
      head = head -> next;
      free(head1->ptr);
-     free(head);
+     free(head1);
+     object_db->head= head;
      return;
    }
 
@@ -273,12 +275,12 @@ void
 print_object_rec(object_db_rec_t *obj_rec, int i){
     
     if(!obj_rec) return;
-    printf("---------------------------------------------------------------------------|\n");
+    printf("---------------------------------------------------------------------------------------------|\n");
     printf("%-3d ptr = %-8p | next = %-8p | units = %-4d | str_name = %-10s| is_root = %s \n\n", 
         i, obj_rec->ptr, obj_rec->next, obj_rec->units, obj_rec->struct_rec->struct_name, 
         obj_rec->is_root ? "TRUE " : "FALSE"); 
 
-    printf("Corresponding_oject details are as follows|\n");
+   // printf("Corresponding_oject details are as follows|\n");
 }
 
 
@@ -290,10 +292,10 @@ print_object_db(object_db_t *object_db){
 
     object_db_rec_t *head = object_db->head;
     unsigned int i = 0;
-    printf("\nPrinting OBJECT DATABASE\n");
+    printf("\n\nPrinting OBJECT DATABASE\n");
     for(; head; head = head->next){
         print_object_rec(head, i++);
-        //mld_dump_object_rec_details(head);
+        mld_dump_object_rec_details(head);
     }
 }
 
@@ -471,7 +473,7 @@ report_leaked_objects(object_db_t *object_db){
     int i = 0;
     object_db_rec_t *head;
 
-    printf("Dumping Leaked Objects\n");
+    printf("\nDumping Leaked Objects\n");
 
     for(head = object_db->head; head; head = head->next){
         if(!head->is_visited){
