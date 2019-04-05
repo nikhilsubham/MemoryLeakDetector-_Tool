@@ -1,5 +1,5 @@
 #include <assert.h>
-
+#include <string.h>
 /*Structure Data base Definition Begin*/
 
 #define MAX_STRUCTURE_NAME_SIZE 128
@@ -160,6 +160,10 @@ report_leaked_objects(object_db_t *object_db);
 static object_db_rec_t *
 get_next_root_object(object_db_t *object_db, 
                      object_db_rec_t *starting_from_here);
+
+static void
+delete_object_record_from_object_db(object_db_t *object_db, 
+                                    object_db_rec_t *object_rec);
 
 
 

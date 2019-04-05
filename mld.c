@@ -151,6 +151,7 @@ add_object_to_object_db(object_db_t *object_db,
     assert(!obj_rec);
 
     obj_rec = calloc(1, sizeof(object_db_rec_t));
+    printf("object record added %p\n", obj_rec);
 
     obj_rec->next = NULL;
     obj_rec->ptr = ptr;
@@ -239,17 +240,17 @@ void mld_dump_object_rec_details(object_db_rec_t* obj_rec)
 void xfree(object_db_t *object_db, void* ptr)
 {
    assert(object_db_look_up(object_db, ptr));
-  
+   
    object_db_rec_t *head = object_db->head;
    object_db_rec_t *head1 = head;
    
    if(!head) return ;
-
+   
    if(head->ptr == ptr){
      head = head -> next;
+     object_db->head= head;
      free(head1->ptr);
      free(head1);
-     object_db->head= head;
      return;
    }
 
@@ -266,6 +267,7 @@ void xfree(object_db_t *object_db, void* ptr)
         head = head->next;
    }
 }
+
 
 
 
@@ -295,7 +297,7 @@ print_object_db(object_db_t *object_db){
     printf("\n\nPrinting OBJECT DATABASE\n");
     for(; head; head = head->next){
         print_object_rec(head, i++);
-        mld_dump_object_rec_details(head);
+        //mld_dump_object_rec_details(head);
     }
 }
 
@@ -379,6 +381,10 @@ mld_explore_objects_recursively(object_db_t *object_db,
 
     /*Parent object must have already visited*/
     assert(parent_obj_rec->is_visited);
+
+    if(parent_struct_rec->n_fields == 0){
+        return;
+    }
 
     for( i = 0; i < parent_obj_rec->units; i++){
 
@@ -486,20 +492,18 @@ report_leaked_objects(object_db_t *object_db){
 
 
 
+/*Support for primitive data types*/
+void
+mld_init_primitive_data_types_support(struct_db_t *struct_db){
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    
+    //REG_STRUCT(struct_db, int , 0);
+    reg_structure(struct_db, "int", sizeof(int), NULL, 0);
+    //REG_STRUCT(struct_db, float , 0);
+    reg_structure(struct_db, "float", sizeof(float), NULL, 0);
+    //REG_STRUCT(struct_db, double , 0);
+    reg_structure(struct_db, "double", sizeof(double), NULL, 0);
+}
 
 
 
